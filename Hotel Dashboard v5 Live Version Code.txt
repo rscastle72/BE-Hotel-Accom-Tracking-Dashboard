@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Guest Accommodation Tracking Dashboard</title>
+    <!-- 1. Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                },
+            },
+        };
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- NEW: Load Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden; /* Prevent horizontal scrollbar during animations */
+        }
+        #dashboard-container.hidden {
+            display: none;
+        }
+        
+        /* --- NEW: Animation --- */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animated-item {
+            opacity: 0; /* Start hidden */
+            animation: fadeInUp 0.5s ease-out forwards;
+        }
+
+        /* --- NEW: For Accordion --- */
+        .accordion-content {
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+        }
+        .accordion-content:not(.hidden) {
+            max-height: 1000px; /* Arbitrary large value */
+            opacity: 1;
+        }
+
+        /* --- NEW: For Master Logistics Grid --- */
+        #logistics-matrix-container,
+        /* NEW: Added ID for departure grid */
+        #departure-logistics-matrix-container {
+            font-family: 'Segoe UI', 'Inter', sans-serif; /* Per user request */
+        }
+        .bi-matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem; /* 14px */
+            text-align: right;
+            color: #333;
+        }
+        .bi-matrix-table th, 
+        .bi-matrix-table td {
+            border: 1px solid #e0e0e0; /* Light gray borders */
+            /* UPDATED: Padding reduced for compactness */
+            padding: 0.5rem 0.75rem; /* 8px 12px */
+            white-space: nowrap;
+        }
+
+        /* NEW: Increase data cell font size for readability */
+        .bi-matrix-table td {
+             font-size: 1rem;
+        }
+
+        /* --- Sticky Headers --- */
+        .bi-matrix-table thead th {
+            position: sticky;
+            top: 0;
+            /* UPDATED: Corporate header style */
+            background-color: #2c3e50; /* Muted slate blue */
+            color: #ffffff;
+            z-index: 20;
+            font-weight: 600;
+            /* UPDATED: Match border */
+            border-bottom: 2px solid #2c3e50; 
+            /* NEW: Match font-size of first column header */
+            font-size: 1.1rem;
+            
+            /* --- START OF USER REQUESTED CHANGE 1 --- */
+            text-align: center; /* Center-align all headers */
+            /* --- END OF USER REQUESTED CHANGE 1 --- */
+        }
+        .bi-matrix-table .sticky-col {
+            position: sticky;
+            background-color: #f9fafb; /* gray-50 */
+            z-index: 10;
+            text-align: left;
+            font-weight: 500;
+        }
+        .bi-matrix-table thead .header-cell.sticky-col {
+            /* UPDATED: Match corporate header */
+            background-color: #2c3e50;
+            z-index: 30;
+            /* --- START OF USER REQUESTED CHANGE 1 (Override) --- */
+            text-align: center; /* Ensure sticky headers are also centered */
+            /* --- END OF USER REQUESTED CHANGE 1 (Override) --- */
+        }
+
+        /* --- START OF USER REQUESTED CHANGE --- */
+        /* NEW: Ensure 'TOTAL' header cell matches corporate style */
+        .bi-matrix-table thead .total-col {
+            background-color: #2c3e50; /* Match corporate header */
+            color: #ffffff; /* Match corporate header text */
+        }
+        /* --- END OF USER REQUESTED CHANGE --- */
+
+        /* First sticky column (Date) */
+        .bi-matrix-table th.sticky-col:nth-child(1),
+        .bi-matrix-table td.sticky-col.date-cell {
+            left: 0;
+            min-width: 140px;
+            /* NEW: Date column emphasis */
+            font-size: 1.1rem;
+            font-weight: 700;
+            /* background-color: #f8f9fa; /* Light neutral */ /* <-- REMOVED */
+        }
+        /* NEW: Add background color only to the td */
+        .bi-matrix-table td.sticky-col.date-cell {
+            background-color: #f8f9fa; /* Light neutral */
+        }
+
+        /* Second sticky column (Time Range) */
+        .bi-matrix-table th.sticky-col:nth-child(2),
+        .bi-matrix-table td.sticky-col.time-cell {
+            left: 140px; /* Match min-width of first col */
+            min-width: 120px;
+            /* NEW: Ensure this bg is lighter than date */
+            /* background-color: #fdfdfd; */ /* <-- REMOVED */
+        }
+        /* NEW: Add background color only to the td */
+        .bi-matrix-table td.sticky-col.time-cell {
+            /* NEW: Ensure this bg is lighter than date */
+            background-color: #fdfdfd;
+        }
+        /* Sticky colspanned cells */
+        .bi-matrix-table .day-total-row .sticky-col,
+        .bi-matrix-table tfoot .sticky-col {
+            left: 0;
+        }
+        /* NEW: Ensure sticky total labels match row bg */
+        .bi-matrix-table .day-total-row .sticky-col {
+            /* background-color: #f4f4f5; */ /* gray-100 */
+            background-color: #eef6fc; /* Light blue highlight */
+        }
+        .bi-matrix-table .grand-total-row .sticky-col {
+            /* background-color: #e5e7eb; */ /* gray-200 */
+            background-color: #bfdbfe; /* Darker blue highlight (blue-200) */
+        }
+
+
+        /* --- Colors & Lines --- */
+        .bi-matrix-table .date-row-start td {
+            /* UPDATED: Reinforced date separation border */
+            border-top: 3px solid #444; 
+        }
+        /* REMOVED: Redundant rule, handled above */
+        
+        /* Total Column Styling */
+        .bi-matrix-table .total-col {
+            font-weight: 700; /* Bold */
+            /* UPDATED: Highlight background for row totals */
+            background-color: #eef6fc; /* Light blue highlight */
+            border-left: 2px solid #a0a0a0; 
+            text-align: center; /* Center-align totals */
+        }
+        .bi-matrix-table .total-cell {
+            font-weight: 700;
+            /* background-color: #f4f4f5; */ /* gray-100 */ /* <-- REMOVED */
+            text-align: center; /* Center-align totals */
+        }
+        .bi-matrix-table .day-total-row {
+             /* background-color: #f4f4f5; */ /* gray-100 */
+             background-color: #eef6fc; /* Light blue highlight */
+        }
+         .bi-matrix-table .grand-total-row {
+            border-top: 2px solid #333;
+            /* background-color: #e5e7eb; */ /* gray-200 */
+            background-color: #bfdbfe; /* Darker blue highlight (blue-200) */
+            font-size: 0.925rem;
+            font-weight: 700; /* Ensured bold */
+         }
+         .bi-matrix-table .data-cell {
+            text-align: center;
+         }
+    </style>
+</head>
+<!-- UPDATED: body tag for flex layout --><body class="bg-gray-100 min-h-screen flex">
+
+    <!-- NEW: Left Side Panel --><!-- This is hidden on screens smaller than 'lg' (1024px) --><!-- UPDATED: Width reduced from w-44 to w-36 (approx 20% reduction) --><div class="hidden lg:block w-36 flex-shrink-0 h-screen sticky top-0">
+        <img src="https://raw.githubusercontent.com/rscastle72/BE-SOM-MM-Side-Panel-Design-Left/main/side%20panel%20design.png" 
+             alt="Side Panel Design" 
+             class="w-full h-full object-cover"
+             onerror="this.style.display='none'"> <!-- Hide if image fails to load --></div>
+
+    <!-- NEW: Main Content Scrollable Wrapper --><!-- This wrapper takes up the remaining space and handles scrolling --><div class="flex-grow p-6 sm:p-10 overflow-y-auto">
+        
+        <!-- This is the original content container, now centered within the scrollable wrapper --><!-- NEW: Added id="main-container" --><div id="main-container" class="max-w-7xl mx-auto">
+            
+            <!-- UPDATED: Added flex for logo positioning --><header class="mb-8 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-start">
+                <div class="sm:mb-0"> <!-- Text content wrapper -->
+                    <h1 class="text-3xl font-bold text-gray-900">BIMP-EAGA 33rd SOM & 28th MM</h1>
+                    <p class="text-3xl font-bold text-gray-900 mt-1 uppercase">Hotel Guest Accommodation Tracking Dashboard</p>
+                </div>
+                
+                <!-- UPDATED: Added flex, items-center, and gap-4 to show logos side-by-side --><div class="flex-shrink-0 mb-4 sm:mb-0 flex items-center gap-4"> <!-- Logo wrapper --><!-- NEW: MinDA Logo --><!-- Note: Converted GitHub page URL to raw content URL for it to display --><img src="https://raw.githubusercontent.com/rscastle72/logo/main/minda%20logo%20.png" 
+                        alt="MinDA Logo" 
+                        class="h-20 sm:h-24 rounded-md shadow-sm"
+                        onerror="this.src='https://placehold.co/100x100/e2e8f0/94a3b8?text=MinDA'">
+
+                    <!-- Existing BE SOM MM Logo --><img src="https://raw.githubusercontent.com/rscastle72/BE-SOM-MM-Logo/main/bimp%20som%20mm%20logo.png" 
+                        alt="Event Logo" 
+                        class="h-20 sm:h-24 rounded-md shadow-sm"
+                        onerror="this.src='https://placehold.co/100x100/e2e8f0/94a3b8?text=BIMP'">
+                </div>
+            </header>
+
+            <!-- 2. NEW: Loading State Section -->
+            <!-- This section replaces the old file uploader -->
+            <div id="loading-state" class="bg-white rounded-lg shadow p-6 mb-8 text-center transition duration-300 ease-in-out">
+                <h2 class="text-xl font-semibold mb-4">Loading Live Dashboard Data...</h2>
+                <p class="text-gray-600 mb-4">Fetching the latest registration data from Google Sheets.</p>
+                <div class="flex justify-center">
+                    <div id="loading-spinner" class="mt-4">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    </div>
+                </div>
+                <p id="error-message" class="text-red-500 text-sm mt-2"></p>
+            </div>
+
+            <!-- 3. Dashboard Container (hidden until file is loaded) --><div id="dashboard-container" class="hidden">
+                
+                <!-- Summary Booking Section --><div class="mb-8">
+                    <!-- UPDATED: Removed h2 from here. Titles are now inside the grid. --><!-- UPDATED: Grid now handles the new layout --><div id="summary-kpi-grid" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- NEW: Column 1 for Total Responses --><div class="lg:col-span-1">
+                            <!-- UPDATED: Title changed from "Summary Responses" -->
+                            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Summary of Responses</h2>
+                            <!-- Static Total Responses Card --><div class="bg-white rounded-lg shadow p-6 border border-gray-200 border-l-4 border-blue-600 transition duration-300 ease-in-out hover:-translate-y-1 hover:scale-[1.02] hover:shadow-lg flex flex-col">
+                                <h3 class="text-base font-medium text-gray-600 uppercase tracking-wide">
+                                    <!-- UPDATED: Text changed --><span>Total Responses Received</span>
+                                </h3>
+                                <p id="total-responses" class="text-4xl font-bold text-blue-700 mt-auto">0</p>
+                            </div>
+                        </div>
+
+                        <!-- NEW: Column 2 for Breakdown --><div class="lg:col-span-2">
+                            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Breakdown of Preferred Hotels</h2>
+                            <!-- NEW: Nested grid for the two breakdown cards --><div id="preferred-hotels-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <!-- JS will add 'Designated Hotel' and 'Other Hotels' cards here --></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Booking Count by Designated Hotel Section --><div class="mb-8">
+                    <!-- UPDATED: Bolder, darker text --><h2 class="text-2xl font-semibold text-gray-800 mb-4">Booking Count by Designated Hotel</h2>
+                    <div id="hotel-kpi-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                        <!-- JS will add the 5 hotel cards here (no icons for this section) --></div>
+                </div>
+
+                <!-- NEW: Participant Count by Country Section --><div class="mb-8">
+                    <!-- UPDATED: Bolder, darker text --><h2 class="text-2xl font-semibold text-gray-800 mb-4">Participant Count by Country</h2>
+                    <div id="country-kpi-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                        <!-- JS will add the 4 country cards + 1 NGO card here --></div>
+                </div>
+
+                <!-- 
+                    *****************************************************
+                    * ARRIVAL LOGISTICS SECTION *
+                    *****************************************************
+                 -->
+
+                <!-- NEW: Arrival Logistics Section --><div id="arrival-logistics-section" class="mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Arrival & Departure Date Overview</h2>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        
+                        <!-- Card 1: Arrivals by Date -->
+                        <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-700 mb-4">Arrivals by Date</h3>
+                            
+                            <!-- UPDATED: Replaced table container with a div for the chart -->
+                            <!-- The height (h-96) is equivalent to max-h-96 (24rem) and provides a fixed space for the chart -->
+                            <div id="arrivals-by-date-chart-container" class="relative h-96">
+                                <canvas id="arrivals-by-date-chart"></canvas>
+                            </div>
+
+                        </div>
+
+                        <!-- Card 1: Departures by Date -->
+                        <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-700 mb-4">Departures by Date</h3>
+                            <div id="departures-by-date-chart-container" class="relative h-96">
+                                <canvas id="departures-by-date-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 
+                    *****************************************************
+                    * DEPARTURE LOGISTICS SECTION *
+                    *****************************************************
+                 -->
+
+                <!-- NEW: Departure Logistics Section --><div id="departure-logistics-section" class="mb-8 hidden">
+                    <!-- UPDATED: Title changed -->
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Departure Logistics (Check-outs & Transfers)</h2>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        
+                        <!-- Card 1: Departures by Date -->
+                        <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-700 mb-4">Departures by Date</h3>
+                            <div id="departures-by-date-chart-container" class="relative h-96">
+                                <canvas id="departures-by-date-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Departures by Time (per Hotel) -->
+                        <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+                             <h3 class="text-lg font-semibold text-gray-700 mb-4">Departures by Time (Per Hotel)</h3>
+                             <div id="departures-by-time-container" class="overflow-y-auto max-h-96 space-y-4">
+                                 <p class="text-center text-gray-500">Loading data...</p>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 
+                    *****************************************************
+                    * NEW: MASTER ARRIVAL LOGISTICS GRID *
+                    *****************************************************
+                 -->
+                <div id="logistics-grid-section" class="mb-8">
+                    <!-- UPDATED: Title -->
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Master Arrival Logistic Grid (Check-ins & Transfers)</h2>
+                    <!-- Container for the matrix with overflow for sticky headers -->
+                    <div id="logistics-matrix-container" class="bg-white rounded-lg shadow p-6 border border-gray-200 overflow-auto" style="max-height: 800px;">
+                        <!-- JS will populate this -->
+                        <p class="text-center text-gray-500">Loading data...</p>
+                    </div>
+                </div>
+
+                <!-- 
+                    *****************************************************
+                    * NEW: MASTER DEPARTURE LOGISTICS GRID (FROM REQUEST) *
+                    *****************************************************
+                -->
+                <div id="departure-logistics-grid-section" class="mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Master Departure Logistic Grid (Check-outs & Transfers)</h2>
+                    <!-- Container for the matrix with overflow for sticky headers -->
+                    <div id="departure-logistics-matrix-container" class="bg-white rounded-lg shadow p-6 border border-gray-200 overflow-auto" style="max-height: 800px;">
+                        <!-- JS will populate this -->
+                        <p class="text-center text-gray-500">Loading data...</p>
+                    </div>
+                </div>
+
+
+            </div> <!-- End of dashboard-container -->
+        </div> <!-- End of original max-w-7xl div -->
+    </div> <!-- End of new Main Content Wrapper -->
+    
+    <!-- REMOVED: Right Side Panel -->
+
+    <script>
+        // --- NEW: LIVE DATA URL ---
+        // 1. In Google Sheets, go to File > Share > Publish to web.
+        // 2. Select your sheet, and publish as "Comma-separated values (.csv)".
+        // 3. Paste the published URL here between the quotes.
+        const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTRyeKJA7dLPUo_HXN-9iB02C_ezeXiiSLTkvp4JP2BbIofSeZ0D_xnIVoQLCfa5w/pub?output=csv';
+        // --- END ---
+
+        // Get persistent elements
+        const dashboard = document.getElementById('dashboard-container');
+        
+        // --- NEW: Global variable to hold the chart instance ---
+        let arrivalChartInstance = null;
+        // --- NEW: Global variable for Departure chart ---
+        let departureChartInstance = null;
+
+        // Column names from the CSV
+        // !!! IMPORTANT: Update these values if your CSV column names are different !!!
+        const COLUMNS = {
+            COUNTRY: 'Country Representation',
+            DELEGATION_STATUS: 'Delegation Status',
+            HOTEL: 'Hotel Accommodation',
+            ARRIVAL_DATE: 'Arrival Date', 
+            ARRIVAL_TIME: 'Arrival Time',  
+            DEPARTURE_DATE: 'Departure Date', 
+            DEPARTURE_TIME: 'Departure Time'  
+        };
+
+        const NON_HOTEL_TERMS = new Set([
+            '', 'n/a', 'davao based', 'own arrangement', 
+            'consulate general of the republic of indonesia', 
+            'consulate general of malaysia', 'none'
+        ]);
+
+        const SHUTTLE_HOTELS = [
+            'Dusit Thani', 'Go Hotels', 'Park Inn', 
+            'Acacia Hotel', 'Waterfront Hotel'
+        ];
+
+        const MATRIX_HOTELS = [
+            'Dusit Thani', 'Go Hotels', 'Park Inn', 
+            'Acacia Hotel', 'Waterfront Hotel'
+        ];
+        
+        const MATRIX_TIME_BINS = [
+            "Morning (6am-12pm)",
+            "Afternoon (12pm-6pm)",
+            "Evening (6pm-6am)", // This now covers 6pm to 6am
+            "Not Specified" // Catch-all for data that doesn't fit other bins
+        ];
+
+        // --- REMOVED: uploader.addEventListener('change', handleFile); ---
+        
+        // ... existing parseCSV function ...
+        function parseCSV(csvText) {
+            const rows = [];
+            let currentRow = [];
+            let currentField = '';
+            let inQuotes = false;
+            // Handle BOM (Byte Order Mark)
+            if (csvText.charCodeAt(0) === 0xFEFF) {
+                csvText = csvText.substring(1);
+            }
+            csvText += '\n'; // Add newline to ensure last row is processed
+            for (let i = 0; i < csvText.length; i++) {
+                const char = csvText[i];
+                const nextChar = csvText[i + 1];
+                if (inQuotes) {
+                    if (char === '"') {
+                        if (nextChar === '"') {
+                            currentField += '"';
+                            i++; // Skip next quote
+                        } else {
+                            inQuotes = false;
+                        }
+                    } else {
+                        currentField += char;
+                    }
+                } else {
+                    if (char === '"') {
+                        inQuotes = true;
+                    } else if (char === ',') {
+                        currentRow.push(currentField);
+                        currentField = '';
+                    } else if (char === '\n' || char === '\r') {
+                        if (char === '\r' && nextChar === '\n') {
+                            i++; // Skip CRLF
+                        }
+                        currentRow.push(currentField);
+                        // Only add row if it has some data
+                        const hasData = currentRow.some(field => field !== '');
+                        if (hasData) {
+                            rows.push(currentRow);
+                        }
+                        currentRow = [];
+                        currentField = '';
+                    } else {
+                        currentField += char;
+                    }
+                }
+            }
+            return rows;
+        }
+
+        // --- REMOVED: function handleFile(event) { ... } ---
+        // The logic is now in loadDashboardData()
+
+        // --- UPDATED: processData function ---
+        function processData(csvText) {
+            // Clear old dynamic cards before (re)processing
+            // This ensures if data is re-loaded, it doesn't stack
+            const dynamicCards = document.querySelectorAll('.dynamic-card');
+            dynamicCards.forEach(card => card.remove());
+
+            // Clear charts
+            if (arrivalChartInstance) arrivalChartInstance.destroy();
+            if (departureChartInstance) departureChartInstance.destroy();
+
+            const rows = parseCSV(csvText);
+            if (rows.length <= 1) {
+                throw new Error("CSV file is empty or has no data rows.");
+            }
+            const totalDataRows = rows.length - 1;
+            const headers = rows[0].map(h => h.trim().replace(/^"|"$/g, ''));
+            
+            const indices = {
+                country: headers.indexOf(COLUMNS.COUNTRY),
+                status: headers.indexOf(COLUMNS.DELEGATION_STATUS),
+                hotel: headers.indexOf(COLUMNS.HOTEL),
+                arrivalDate: headers.indexOf(COLUMNS.ARRIVAL_DATE),
+                arrivalTime: headers.indexOf(COLUMNS.ARRIVAL_TIME), 
+                departureDate: headers.indexOf(COLUMNS.DEPARTURE_DATE),
+                departureTime: headers.indexOf(COLUMNS.DEPARTURE_TIME)
+            };
+            
+            const requiredCols = [
+                { key: 'country', name: COLUMNS.COUNTRY },
+                { key: 'status', name: COLUMNS.DELEGATION_STATUS },
+                { key: 'hotel', name: COLUMNS.HOTEL },
+                { key: 'arrivalDate', name: COLUMNS.ARRIVAL_DATE },
+                { key: 'arrivalTime', name: COLUMNS.ARRIVAL_TIME },
+                { key: 'departureDate', name: COLUMNS.DEPARTURE_DATE },
+                { key: 'departureTime', name: COLUMNS.DEPARTURE_TIME }
+            ];
+
+            const missing = requiredCols
+                .filter(col => indices[col.key] === -1)
+                .map(col => `"${col.name}"`)
+                .join(', ');
+
+            if (missing) {
+                throw new Error(`CSV missing required columns: ${missing}`);
+            }
+
+            const participants = [];
+            for (let i = 1; i < rows.length; i++) {
+                let hotel_raw = (rows[i][indices.hotel] || '').trim().replace(/^"|"$/g, ''); 
+                let country = (rows[i][indices.country] || '').trim().replace(/^"|"$/g, '');
+                let status = (rows[i][indices.status] || '').trim().replace(/^"|"$/g, '');
+                let arrivalDate = (rows[i][indices.arrivalDate] || '').trim().replace(/^"|"$/g, '');
+                let arrivalTime = (rows[i][indices.arrivalTime] || '').trim().replace(/^"|"$/g, '');
+                let departureDate = (rows[i][indices.departureDate] || '').trim().replace(/^"|"$/g, '');
+                let departureTime = (rows[i][indices.departureTime] || '').trim().replace(/^"|"$/g, '');
+
+                if (!country) country = 'Unknown';
+                if (!status) status = 'Unknown';
+
+                const hotelBin = getDesignatedHotelBin(hotel_raw);
+                
+                participants.push({ 
+                    hotel: hotelBin, 
+                    country, status, 
+                    arrivalDate, arrivalTime, 
+                    departureDate, departureTime 
+                });
+            }
+
+            const hotelCounts = countBy(participants, 'hotel');
+            const countryCounts = countBy(participants, 'country');
+
+            const { arrivalDateCounts } = processArrivalData(participants);
+            const { departureDateCounts } = processDepartureData(participants);
+            
+            const logisticsGridData = processLogisticsGrid(participants);
+            const departureLogisticsGridData = processDepartureLogisticsGrid(participants);
+
+            renderKPIs(
+                totalDataRows, hotelCounts, countryCounts, 
+                arrivalDateCounts,
+                departureDateCounts,
+                logisticsGridData, 
+                departureLogisticsGridData 
+            );
+        }
+
+        // --- NEW: Helper function to get time bin ---
+        function getTimeBin(timeStr) {
+            if (!timeStr) return "Not Specified";
+
+            try {
+                // This is surprisingly robust for "10:00 AM", "10:30", "14:00"
+                const date = new Date('1970-01-01 ' + timeStr); 
+                if (!isNaN(date.getTime())) {
+                    const hour = date.getHours();
+                    if (hour >= 6 && hour < 12) return "Morning (6am-12pm)";
+                    if (hour >= 12 && hour < 18) return "Afternoon (12pm-6pm)";
+                    // UPDATED: Combined Evening (18-24) and Night (0-6)
+                    if ((hour >= 18 && hour < 24) || (hour >= 0 && hour < 6)) return "Evening (6pm-6am)";
+                }
+
+                // Fallback for "1000H"
+                const match = timeStr.match(/^(\d{2})(\d{2})H?$/);
+                if (match) {
+                     const hour = parseInt(match[1]);
+                     if (hour >= 6 && hour < 12) return "Morning (6am-12pm)";
+                     if (hour >= 12 && hour < 18) return "Afternoon (12pm-6pm)";
+                     // UPDATED: Combined Evening (18-24) and Night (0-6)
+                     if ((hour >= 18 && hour < 24) || (hour >= 0 && hour < 6)) return "Evening (6pm-6am)";
+                }
+            } catch (e) {
+                // fall through
+            }
+            return "Not Specified";
+        }
+
+        // --- NEW: Helper function to parse date string ---
+        function parseDateString(dateStr) {
+            try {
+                // --- Manual parsing for "month/day/year" format ---
+                const parts = dateStr.split('/');
+                let date;
+                
+                // Check for "month/day/year" with 2 or 4 digit year
+                if (parts.length === 3) {
+                    const month = parseInt(parts[0], 10);
+                    const day = parseInt(parts[1], 10);
+                    let year = parseInt(parts[2], 10);
+
+                    // Handle two-digit year, assume 20xx
+                    if (year < 100) {
+                        year += 2000;
+                    }
+                    
+                    // new Date(year, monthIndex, day)
+                    // month is 0-indexed (0=Jan, 11=Dec)
+                    date = new Date(year, month - 1, day);
+                } else {
+                   // Try default parsing as a fallback if format is not as expected
+                   date = new Date(dateStr);
+                }
+
+                if (date && !isNaN(date.getTime())) {
+                    return date;
+                }
+                return null; // Invalid date
+            } catch (e) {
+                return null; // Error parsing
+            }
+        }
+
+        // --- NEW: Single source of truth for hotel categorization ---
+        function getDesignatedHotelBin(hotelName) {
+            const lowerHotel = (hotelName || '').trim().toLowerCase();
+
+            // 1. Check for non-hotel terms FIRST
+            if (NON_HOTEL_TERMS.has(lowerHotel)) {
+                return 'Other / No Hotel';
+            }
+
+            // 2. Check for designated hotels
+            if (lowerHotel.includes('dusit thani')) return 'Dusit Thani';
+            if (lowerHotel.includes('go hotels')) return 'Go Hotels';
+            if (lowerHotel.includes('park inn')) return 'Park Inn';
+            if (lowerHotel.includes('acacia hotel')) return 'Acacia Hotel';
+            if (lowerHotel.includes('discovery samal')) return 'Waterfront Hotel'; // Map Discovery
+            if (lowerHotel.includes('waterfront hotel')) return 'Waterfront Hotel';
+
+            // 3. Everything else (e.g., other hotels not on the list) is 'Other / No Hotel'
+            return 'Other / No Hotel';
+        }
+
+
+        // --- NEW: Helper function to process arrival data ---
+        function processArrivalData(participants) {
+            const arrivalDateCounts = {};
+            participants.forEach(p => {
+                // 1. Process Arrival Date
+                let dateStr = p.arrivalDate;
+                if (dateStr) {
+                    const date = parseDateString(dateStr);
+                    if (date) { 
+                        // Format to user-friendly format
+                        const friendlyDate = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                        arrivalDateCounts[friendlyDate] = (arrivalDateCounts[friendlyDate] || 0) + 1;
+                    } else {
+                        arrivalDateCounts["Date Not Specified"] = (arrivalDateCounts["Date Not Specified"] || 0) + 1;
+                    }
+                } else {
+                    arrivalDateCounts["Date Not Specified"] = (arrivalDateCounts["Date Not Specified"] || 0) + 1;
+                }
+            });
+
+            return { arrivalDateCounts };
+        }
+
+        // --- NEW: Helper function to process DEPARTURE data ---
+        function processDepartureData(participants) {
+            const departureDateCounts = {};
+            participants.forEach(p => {
+                // 1. Process Departure Date
+                let dateStr = p.departureDate;
+                if (dateStr) {
+                    const date = parseDateString(dateStr);
+                    if (date) { 
+                        // Format to user-friendly format
+                        const friendlyDate = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                        departureDateCounts[friendlyDate] = (departureDateCounts[friendlyDate] || 0) + 1;
+                    } else {
+                        departureDateCounts["Date Not Specified"] = (departureDateCounts["Date Not Specified"] || 0) + 1;
+                    }
+                } else {
+                    departureDateCounts["Date Not Specified"] = (departureDateCounts["Date Not Specified"] || 0) + 1;
+                }
+            });
+            return { departureDateCounts };
+        }
+
+        // --- NEW: Helper function to process Master Logistics Grid data ---
+        function processLogisticsGrid(participants) {
+            const gridData = {}; // { 'date': { 'timeBin': { 'hotelBin': count } } }
+            const grandTotals = { byHotel: {}, byTime: {}, total: 0 };
+            
+            // Initialize grand totals
+            MATRIX_HOTELS.forEach(h => grandTotals.byHotel[h] = 0);
+            MATRIX_TIME_BINS.forEach(t => grandTotals.byTime[t] = 0);
+
+            participants.forEach(p => {
+                const date = parseDateString(p.arrivalDate);
+                // Skip participants with no valid arrival date
+                if (!date) return; 
+
+                const dateKey = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                const timeBin = getTimeBin(p.arrivalTime); // Use existing robust function
+                
+                // Skip participants with a timebin not in our matrix list (if any)
+                if (!MATRIX_TIME_BINS.includes(timeBin)) return;
+
+                const hotelBin = p.hotel;
+
+                // If the hotel is 'Other / No Hotel', skip this participant for the grid
+                if (hotelBin === 'Other / No Hotel') return; 
+
+                // Initialize objects if they don't exist
+                if (!gridData[dateKey]) {
+                    gridData[dateKey] = { _dateObj: date, _dayTotals: { byHotel: {}, total: 0 } };
+                    MATRIX_HOTELS.forEach(h => gridData[dateKey]._dayTotals.byHotel[h] = 0);
+                }
+                if (!gridData[dateKey][timeBin]) {
+                    gridData[dateKey][timeBin] = { _rowTotal: 0 };
+                    MATRIX_HOTELS.forEach(h => gridData[dateKey][timeBin][h] = 0);
+                }
+
+                // Increment counts
+                gridData[dateKey][timeBin][hotelBin]++;
+                gridData[dateKey][timeBin]._rowTotal++;
+                gridData[dateKey]._dayTotals.byHotel[hotelBin]++;
+                gridData[dateKey]._dayTotals.total++;
+
+                // Increment grand totals
+                grandTotals.byHotel[hotelBin]++;
+                grandTotals.byTime[timeBin]++;
+                grandTotals.total++;
+            });
+
+            // Sort dates
+            const sortedDateKeys = Object.keys(gridData).sort((a, b) => gridData[a]._dateObj - gridData[b]._dateObj);
+            
+            return { sortedData: gridData, sortedDateKeys, grandTotals };
+        }
+
+        // --- NEW: Helper function to process Master DEPARTURE Logistics Grid data ---
+        function processDepartureLogisticsGrid(participants) {
+            const gridData = {}; // { 'date': { 'timeBin': { 'hotelBin': count } } }
+            const grandTotals = { byHotel: {}, byTime: {}, total: 0 };
+            
+            // Initialize grand totals
+            MATRIX_HOTELS.forEach(h => grandTotals.byHotel[h] = 0);
+            MATRIX_TIME_BINS.forEach(t => grandTotals.byTime[t] = 0);
+
+            participants.forEach(p => {
+                // *** CHANGED ***
+                const date = parseDateString(p.departureDate);
+                // Skip participants with no valid departure date
+                if (!date) return; 
+
+                const dateKey = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                // *** CHANGED ***
+                const timeBin = getTimeBin(p.departureTime); // Use existing robust function
+                
+                // Skip participants with a timebin not in our matrix list (if any)
+                if (!MATRIX_TIME_BINS.includes(timeBin)) return;
+
+                const hotelBin = p.hotel;
+
+                // If the hotel is 'Other / No Hotel', skip this participant for the grid
+                if (hotelBin === 'Other / No Hotel') return; 
+
+                // Initialize objects if they don't exist
+                if (!gridData[dateKey]) {
+                    gridData[dateKey] = { _dateObj: date, _dayTotals: { byHotel: {}, total: 0 } };
+                    MATRIX_HOTELS.forEach(h => gridData[dateKey]._dayTotals.byHotel[h] = 0);
+                }
+                if (!gridData[dateKey][timeBin]) {
+                    gridData[dateKey][timeBin] = { _rowTotal: 0 };
+                    MATRIX_HOTELS.forEach(h => gridData[dateKey][timeBin][h] = 0);
+                }
+
+                // Increment counts
+                gridData[dateKey][timeBin][hotelBin]++;
+                gridData[dateKey][timeBin]._rowTotal++;
+                gridData[dateKey]._dayTotals.byHotel[hotelBin]++;
+                gridData[dateKey]._dayTotals.total++;
+
+                // Increment grand totals
+                grandTotals.byHotel[hotelBin]++;
+                grandTotals.byTime[timeBin]++;
+                grandTotals.total++;
+            });
+
+            // Sort dates
+            const sortedDateKeys = Object.keys(gridData).sort((a, b) => gridData[a]._dateObj - gridData[b]._dateObj);
+            
+            return { sortedData: gridData, sortedDateKeys, grandTotals };
+        }
+
+
+        // --- NEW: Count-up animation function ---
+        function animateCountUp(elementId, endValue) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            const startValue = 0;
+            const duration = 1000; // 1 second animation
+            let startTime = null;
+
+            function animationStep(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const progress = timestamp - startTime;
+                const percentage = Math.min(progress / duration, 1);
+                
+                // Calculate the current value
+                const currentValue = Math.floor(percentage * (endValue - startValue) + startValue);
+                
+                element.textContent = currentValue;
+
+                if (percentage < 1) {
+                    // Continue animation
+                    requestAnimationFrame(animationStep);
+                } else {
+                    // Ensure it ends on the exact value
+                    element.textContent = endValue; 
+                }
+            }
+            // Start the animation
+            requestAnimationFrame(animationStep);
+        }
+
+        // --- UPDATED: renderKPIs function ---
+        function renderKPIs(
+            totalDataRows, hotelCounts, countryCounts, 
+            arrivalDateCounts,
+            departureDateCounts,
+            logisticsGridData, // NEW
+            departureLogisticsGridData // NEW
+        ) {
+            // UPDATED: Call animation function instead of setting textContent directly
+            animateCountUp('total-responses', totalDataRows);
+            
+            // UPDATED: Get the new target grid for breakdown cards
+            const preferredHotelsGrid = document.getElementById('preferred-hotels-grid');
+            const hotelKpiGrid = document.getElementById('hotel-kpi-grid');
+            const countryKpiGrid = document.getElementById('country-kpi-grid');
+
+            // --- 1. Get counts for all hotel types ---
+            const shuttleHotelData = SHUTTLE_HOTELS.map(hotelName => ({
+                name: hotelName,
+                // --- START OF LOGIC CORRECTION ---
+                // This now correctly reads the binned counts (e.g., hotelCounts['Waterfront Hotel'])
+                count: hotelCounts[hotelName] || 0
+                // --- END OF LOGIC CORRECTION ---
+            }));
+            const designatedHotelCount = shuttleHotelData.reduce((sum, hotel) => sum + hotel.count, 0);
+
+            // --- START OF LOGIC CORRECTION ---
+            // Get the count for 'Other / No Hotel' directly from the binned counts
+            const calculatedOtherCount = hotelCounts['Other / No Hotel'] || 0;
+            // --- END OF LOGIC CORRECTION ---
+
+            // --- 2. Create "Designated Hotel" Card ---
+            const designatedCard = document.createElement('div');
+            // UPDATED: Added icon, new text color, flex flex-col
+            // FIX: Added missing className assignment and wrapped HTML in innerHTML
+            designatedCard.className = 'dynamic-card bg-white rounded-lg shadow p-6 border border-gray-200 border-l-4 border-gray-400 transition duration-300 ease-in-out hover:-translate-y-1 hover:scale-[1.02] hover:shadow-lg flex flex-col';
+            designatedCard.innerHTML = `
+                <h3 class="text-base font-medium text-gray-600 uppercase tracking-wide">
+                    <!-- --- START OF USER REQUESTED CHANGE 2 --- -->
+                    <span>MinDA-Designated Hotels</span>
+                    <!-- --- END OF USER REQUESTED CHANGE 2 --- -->
+                </h3>
+                <!-- UPDATED: Changed mt-2 to mt-auto, added text color, and added id="count-designated" --><p id="count-designated" class="text-4xl font-bold text-blue-700 mt-auto">0</p>
+            `;
+            // UPDATED: Append to the new grid
+            preferredHotelsGrid.appendChild(designatedCard);
+            // NEW: Animate the count
+            animateCountUp('count-designated', designatedHotelCount);
+
+            // --- 3. Create "Other Hotels/No Hotels Specified" Card ---
+            const otherCard = document.createElement('div');
+            // UPDATED: Added icon, new text color, flex flex-col
+            // FIX: Added missing className assignment and wrapped HTML in innerHTML
+            otherCard.className = 'dynamic-card bg-white rounded-lg shadow p-6 border border-gray-200 border-l-4 border-gray-400 transition duration-300 ease-in-out hover:-translate-y-1 hover:scale-[1.02] hover:shadow-lg flex flex-col';
+            otherCard.innerHTML = `
+                <h3 class="text-base font-medium text-gray-600 uppercase tracking-wide">
+                    <span>Other Hotels/No Hotels Specified</span>
+                </h3>
+                <!-- UPDATED: Changed mt-2 to mt-auto, added text color, and added id="count-other" --><p id="count-other" class="text-4xl font-bold text-blue-700 mt-auto">0</p>
+            `;
+            // UPDATED: Append to the new grid
+            preferredHotelsGrid.appendChild(otherCard);
+            // NEW: Animate the count
+            animateCountUp('count-other', calculatedOtherCount);
+
+
+            // --- 4. Sort and create 5 Shuttle Hotel Cards ---
+            shuttleHotelData.sort((a, b) => b.count - a.count);
+
+            // --- 5. Add sorted cards to the hotel grid ---
+            shuttleHotelData.forEach(hotel => {
+                // --- START OF USER REQUESTED CHANGE ---
+                // Calculate and format percentage
+                const percentage = (designatedHotelCount > 0) ? (hotel.count / designatedHotelCount) * 100 : 0;
+                const formattedPercentage = percentage.toFixed(0) + '%';
+                // --- END OF USER REQUESTED CHANGE ---
+
+                const hotelCard = document.createElement('div');
+                // NEW: Create a unique ID for the count element
+                const hotelId = `count-hotel-${hotel.name.replace(/\s+/g, '-')}`;
+                // UPDATED: Changed border to gray, text to black, and added flex flex-col
+                hotelCard.className = 'dynamic-card bg-white rounded-lg shadow p-6 border border-gray-200 border-l-4 border-gray-400 transition duration-300 ease-in-out hover:-translate-y-1 hover:scale-[1.02] hover:shadow-lg flex flex-col';
+                
+                // --- START OF USER REQUESTED CHANGE (HTML Update) ---
+                hotelCard.innerHTML = `
+                    <!-- UPDATED: Changed to flex-between to make space for percentage -->
+                    <h3 class="text-base font-medium text-gray-600 uppercase tracking-wide flex justify-between items-start">
+                        <span>${hotel.name}</span>
+                        <!-- NEW: Added percentage span -->
+                        <span class="text-sm font-semibold text-blue-600">${formattedPercentage}</span>
+                    </h3>
+                    <!-- UPDATED: Changed mt-2 to mt-auto and added unique id --><p id="${hotelId}" class="text-4xl font-bold text-gray-900 mt-auto">0</p>
+                `;
+                // --- END OF USER REQUESTED CHANGE (HTML Update) ---
+
+                hotelKpiGrid.appendChild(hotelCard);
+                // NEW: Animate the count
+                animateCountUp(hotelId, hotel.count);
+            });
+
+            // --- 6. Create Country Cards ---
+            const countriesToShow = ['Philippines', 'Brunei Darussalam', 'Malaysia', 'Indonesia'];
+            const countryData = countriesToShow.map(countryName => ({
+                name: countryName,
+                count: countryCounts[countryName] || 0 
+            }));
+
+            // Sort by count descending
+            countryData.sort((a, b) => b.count - a.count);
+
+            // Add cards to the country grid
+            countryData.forEach(country => {
+                // --- START OF USER REQUESTED CHANGE 3 ---
+                // Calculate and format percentage
+                const percentage = (country.count / totalDataRows) * 100;
+                const formattedPercentage = totalDataRows > 0 ? percentage.toFixed(0) + '%' : '0%';
+                // --- END OF USER REQUESTED CHANGE 3 ---
+                
+                const countryCard = document.createElement('div');
+                // NEW: Create a unique ID for the count element
+                const countryId = `count-country-${country.name.replace(/\s+/g, '-')}`;
+                // UPDATED: Added icon, flex flex-col
+                countryCard.className = 'dynamic-card bg-white rounded-lg shadow p-6 border border-gray-200 border-l-4 border-gray-400 transition duration-300 ease-in-out hover:-translate-y-1 hover:scale-[1.02] hover:shadow-lg flex flex-col';
+
+                // --- START OF USER REQUESTED CHANGE 3 (HTML Update) ---
+                countryCard.innerHTML = `
+                    <!-- UPDATED: Changed to flex-between to make space for percentage -->
+                    <h3 class="text-base font-medium text-gray-600 uppercase tracking-wide flex justify-between items-start">
+                        <span class="flex items-start gap-2"> <!-- Group icon and name -->
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-gray-500">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.209-.682L3 4.5M3 4.5" />
+                            </svg>
+                            <span>${country.name}</span>
+                        </span>
+                        <!-- NEW: Added percentage span -->
+                        <span class="text-sm font-semibold text-blue-600">${formattedPercentage}</span>
+                    </h3>
+                    <!-- UPDATED: Changed mt-2 to mt-auto and added unique id --><p id="${countryId}" class="text-4xl font-bold text-gray-900 mt-auto">0</p>
+                `;
+                // --- END OF USER REQUESTED CHANGE 3 (HTML Update) ---
+                
+                countryKpiGrid.appendChild(countryCard);
+                // NEW: Animate the count
+                animateCountUp(countryId, country.count);
+            });
+
+            // --- 7. Create NGO (Balancing) Card ---
+            const mainCountrySum = countryData.reduce((sum, country) => sum + country.count, 0);
+            const ngoCount = totalDataRows - mainCountrySum;
+
+            // --- START OF USER REQUESTED CHANGE 3 ---
+            // Calculate and format percentage for NGO
+            const ngoPercentage = (ngoCount / totalDataRows) * 100;
+            const formattedNgoPercentage = totalDataRows > 0 ? ngoPercentage.toFixed(0) + '%' : '0%';
+            // --- END OF USER REQUESTED CHANGE 3 ---
+
+            // Create the NGO card element
+            const ngoCard = document.createElement('div');
+            // UPDATED: Added icon, flex flex-col
+            ngoCard.className = 'dynamic-card bg-white rounded-lg shadow p-6 border border-gray-200 border-l-4 border-gray-400 transition duration-300 ease-in-out hover:-translate-y-1 hover:scale-[1.02] hover:shadow-lg flex flex-col';
+            
+            // --- START OF USER REQUESTED CHANGE 3 (HTML Update) ---
+            ngoCard.innerHTML = `
+                <!-- UPDATED: Changed to flex-between to make space for percentage -->
+                <h3 class="text-base font-medium text-gray-600 uppercase tracking-wide flex justify-between items-start">
+                    <span class="flex items-start gap-2"> <!-- Group icon and name -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-gray-500">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.209-.682L3 4.5M3 4.5" />
+                        </svg>
+                        <span>Non-Govt Org.</span>
+                    </span>
+                    <!-- NEW: Added percentage span -->
+                    <span class="text-sm font-semibold text-blue-600">${formattedNgoPercentage}</span>
+                </h3>
+                <!-- UPDATED: Changed mt-2 to mt-auto and added id="count-ngo" --><p id="count-ngo" class="text-4xl font-bold text-gray-900 mt-auto">0</p>
+            `;
+            // --- END OF USER REQUESTED CHANGE 3 (HTML Update) ---
+            
+            // Add the NGO card to the grid
+            countryKpiGrid.appendChild(ngoCard);
+            // NEW: Animate the count
+            animateCountUp('count-ngo', ngoCount);
+
+
+            // --- 
+            // --- NEW: Render Arrival Logistics Data
+            // --- 
+
+            // --- 8. Render Arrivals by Date (UPDATED to Bar Chart) ---
+            const dateChartCanvas = document.getElementById('arrivals-by-date-chart');
+            const dateChartContainer = document.getElementById('arrivals-by-date-chart-container');
+            dateChartContainer.innerHTML = '<canvas id="arrivals-by-date-chart"></canvas>'; // Clear previous
+
+            // Sort the dates
+            const sortedArrivalDates = Object.keys(arrivalDateCounts)
+                .filter(dateStr => dateStr !== "Date Not Specified")
+                .sort((a, b) => new Date(a) - new Date(b));
+
+            const otherArrivalDateLabel = "Date Not Specified";
+            const otherArrivalDateCount = arrivalDateCounts[otherArrivalDateLabel] || 0;
+
+            // Prepare data for the chart
+            const arrivalChartLabels = sortedArrivalDates.map(dateStr => {
+                // Shorten the label for the x-axis, e.g., "Nov 25"
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+            const arrivalChartData = sortedArrivalDates.map(dateStr => arrivalDateCounts[dateStr]);
+
+            // Add the "Not Specified" data at the end
+            if (otherArrivalDateCount > 0) {
+                arrivalChartLabels.push("Not Specified");
+                arrivalChartData.push(otherArrivalDateCount);
+            }
+
+            if (arrivalChartLabels.length === 0) {
+                 dateChartContainer.innerHTML = '<p class="text-gray-500 text-center">No arrival date data found.</p>';
+            } else {
+                const ctx = dateChartCanvas.getContext('2d');
+
+                arrivalChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: arrivalChartLabels,
+                        datasets: [{
+                            label: 'Arrivals',
+                            data: arrivalChartData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)', // Blue-500 with opacity
+                            borderColor: 'rgba(59, 130, 246, 1)', // Blue-500
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // Important for fitting in the container
+                        plugins: {
+                            legend: {
+                                display: false // No legend needed for one dataset
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    // Show full date in tooltip
+                                    title: function(tooltipItems) {
+                                         const index = tooltipItems[0].dataIndex;
+                                         // Use full date for sorted items, "Not Specified" for the last one
+                                         return (index < sortedArrivalDates.length) ? sortedArrivalDates[index] : otherArrivalDateLabel;
+                                    },
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y;
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                     // Ensure only whole numbers are shown on the y-axis
+                                     stepSize: 1,
+                                     callback: function(value) {
+                                         if (value % 1 === 0) {
+                                             return value;
+                                         }
+                                     }
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false // Hide vertical grid lines
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // --- 
+            // --- NEW: Render Departure Logistics Data
+            // --- 
+
+            // --- 10. Render Departures by Date (Bar Chart) ---
+            const departureDateChartCanvas = document.getElementById('departures-by-date-chart');
+            const departureDateChartContainer = document.getElementById('departures-by-date-chart-container');
+            departureDateChartContainer.innerHTML = '<canvas id="departures-by-date-chart"></canvas>'; // Clear previous
+
+            const sortedDepartureDates = Object.keys(departureDateCounts)
+                .filter(dateStr => dateStr !== "Date Not Specified")
+                .sort((a, b) => new Date(a) - new Date(b));
+
+            const otherDepartureDateLabel = "Date Not Specified";
+            const otherDepartureDateCount = departureDateCounts[otherDepartureDateLabel] || 0;
+
+            const departureChartLabels = sortedDepartureDates.map(dateStr => {
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+            const departureChartData = sortedDepartureDates.map(dateStr => departureDateCounts[dateStr]);
+
+            if (otherDepartureDateCount > 0) {
+                departureChartLabels.push("Not Specified");
+                departureChartData.push(otherDepartureDateCount);
+            }
+
+            if (departureChartLabels.length === 0) {
+                 departureDateChartContainer.innerHTML = '<p class="text-gray-500 text-center">No departure date data found.</p>';
+            } else {
+                const ctx = departureDateChartCanvas.getContext('2d');
+                departureChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: departureChartLabels,
+                        datasets: [{
+                            label: 'Departures',
+                            data: departureChartData,
+                            backgroundColor: 'rgba(16, 185, 129, 0.6)', // Green-500 with opacity
+                            borderColor: 'rgba(16, 185, 129, 1)', // Green-500
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(tooltipItems) {
+                                         const index = tooltipItems[0].dataIndex;
+                                         return (index < sortedDepartureDates.length) ? sortedDepartureDates[index] : otherDepartureDateLabel;
+                                    },
+                                    label: function(context) {
+                                        return `Departures: ${context.parsed.y}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                     stepSize: 1,
+                                     callback: value => (value % 1 === 0 ? value : null)
+                                }
+                            },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            }
+
+            // --- 12. Render Master Logistics Grid ---
+            renderMasterLogisticsGrid(logisticsGridData);
+
+            // --- 13. NEW: Render Master Departure Logistics Grid ---
+            renderMasterDepartureLogisticsGrid(departureLogisticsGridData);
+        }
+
+        // --- NEW: Renders the Master Logistics Grid ---
+        function renderMasterLogisticsGrid(data) {
+            const { sortedData, sortedDateKeys, grandTotals } = data;
+            const container = document.getElementById('logistics-matrix-container');
+
+            if (sortedDateKeys.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center">No valid arrival data found for the grid.</p>';
+                return;
+            }
+
+            // UPDATED: Filter out the "Not Specified" bin from rendering
+            const binsToRender = MATRIX_TIME_BINS.filter(bin => bin !== "Not Specified");
+            const rowSpan = binsToRender.length;
+
+            let tableHtml = '<table class="bi-matrix-table">';
+            
+            // 1. Table Header
+            tableHtml += '<thead><tr>';
+            // UPDATED: Column Titles
+            tableHtml += '<th class="sticky-col header-cell">Date of Arrival</th>';
+            tableHtml += '<th class="sticky-col header-cell">Time Period</th>';
+            
+            // --- START OF USER REQUESTED CHANGE ---
+            // This loop now only iterates over the 5 hotels in the updated MATRIX_HOTELS array
+            MATRIX_HOTELS.forEach(hotel => {
+                tableHtml += `<th class="header-cell">${hotel}</th>`;
+            });
+            // --- END OF USER REQUESTED CHANGE ---
+
+            tableHtml += '<th class="total-col header-cell">TOTAL</th>';
+            tableHtml += '</tr></thead>';
+
+            // 2. Table Body
+            tableHtml += '<tbody>';
+            sortedDateKeys.forEach((dateKey) => {
+                const dateData = sortedData[dateKey];
+                
+                // UPDATED: Create date label with weekday
+                const dateObj = new Date(dateData._dateObj);
+                const shortDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const weekDay = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+                const dateLabel = `${shortDate}<br>(${weekDay})`; // e.g., "Nov 9<br>(Sunday)"
+
+                // UPDATED: Loop over filtered bins
+                binsToRender.forEach((timeBin, timeIndex) => {
+                    const timeData = dateData[timeBin];
+                    const isFirstRowForDate = timeIndex === 0;
+
+                    // Add thick border class for the first row of a new date
+                    tableHtml += `<tr class="${isFirstRowForDate ? 'date-row-start' : ''}">`;
+
+                    // Rowspan for Date Cell (only on the first time bin)
+                    if (isFirstRowForDate) {
+                        // UPDATED: Use new dateLabel and corrected rowSpan
+                        tableHtml += `<td class="sticky-col date-cell" rowspan="${rowSpan}">${dateLabel}</td>`;
+                    }
+                    
+                    // Time Bin Cell
+                    tableHtml += `<td class="sticky-col time-cell">${timeBin.split(' ')[0]}</td>`; // Just "Morning", "Afternoon" etc.
+
+                    // --- START OF USER REQUESTED CHANGE ---
+                    // Hotel Data Cells - This loop now only iterates over the 5 designated hotels
+                    MATRIX_HOTELS.forEach(hotel => {
+                        const count = timeData ? (timeData[hotel] || 0) : 0;
+                        tableHtml += `<td class="data-cell">${count === 0 ? 0 : count}</td>`;
+                    });
+                    // --- END OF USER REQUESTED CHANGE ---
+
+                    // Row Total Cell
+                    const rowTotal = timeData ? (timeData._rowTotal || 0) : 0;
+                    tableHtml += `<td class="total-col data-cell">${rowTotal === 0 ? 0 : rowTotal}</td>`;
+
+                    tableHtml += '</tr>';
+                });
+
+                // Add Day Total Row
+                const dayTotals = dateData._dayTotals;
+                tableHtml += '<tr class="day-total-row">';
+                tableHtml += '<td class="sticky-col total-cell" colspan="2">Day Total</td>'; // Colspan 2 (Date + Time)
+                
+                // --- START OF USER REQUESTED CHANGE ---
+                // Day Totals - This loop now only iterates over the 5 designated hotels
+                MATRIX_HOTELS.forEach(hotel => {
+                    const count = dayTotals.byHotel[hotel] || 0;
+                    tableHtml += `<td class="total-cell data-cell">${count === 0 ? 0 : count}</td>`;
+                });
+                // --- END OF USER REQUESTED CHANGE ---
+                
+                tableHtml += `<td class="total-col total-cell data-cell">${dayTotals.total === 0 ? 0 : dayTotals.total}</td>`;
+                tableHtml += '</tr>';
+            });
+
+            // 3. Table Footer (Grand Totals)
+            tableHtml += '<tfoot class="grand-total-row">';
+            tableHtml += '<tr>';
+            tableHtml += '<td class="sticky-col total-cell" colspan="2">GRAND TOTAL</td>';
+            
+            // --- START OF USER REQUESTED CHANGE ---
+            // Grand Totals - This loop now only iterates over the 5 designated hotels
+            MATRIX_HOTELS.forEach(hotel => {
+                const count = grandTotals.byHotel[hotel] || 0;
+                tableHtml += `<td class="total-cell data-cell">${count === 0 ? 0 : count}</td>`;
+            });
+            // --- END OF USER REQUESTED CHANGE ---
+
+            tableHtml += `<td class="total-col total-cell data-cell">${grandTotals.total === 0 ? 0 : grandTotals.total}</td>`;
+            tableHtml += '</tr>';
+            tableHtml += '</tfoot>';
+
+            tableHtml += '</tbody></table>';
+            container.innerHTML = tableHtml;
+        }
+
+        // --- NEW: Renders the Master DEPARTURE Logistics Grid ---
+        function renderMasterDepartureLogisticsGrid(data) {
+            const { sortedData, sortedDateKeys, grandTotals } = data;
+            // *** CHANGED ***
+            const container = document.getElementById('departure-logistics-matrix-container');
+
+            if (sortedDateKeys.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center">No valid departure data found for the grid.</p>';
+                return;
+            }
+
+            // UPDATED: Filter out the "Not Specified" bin from rendering
+            const binsToRender = MATRIX_TIME_BINS.filter(bin => bin !== "Not Specified");
+            const rowSpan = binsToRender.length;
+
+            let tableHtml = '<table class="bi-matrix-table">';
+            
+            // 1. Table Header
+            tableHtml += '<thead><tr>';
+            // *** CHANGED ***
+            tableHtml += '<th class="sticky-col header-cell">Date of Departure</th>';
+            tableHtml += '<th class="sticky-col header-cell">Time Period</th>';
+            
+            MATRIX_HOTELS.forEach(hotel => {
+                tableHtml += `<th class="header-cell">${hotel}</th>`;
+            });
+
+            tableHtml += '<th class="total-col header-cell">TOTAL</th>';
+            tableHtml += '</tr></thead>';
+
+            // 2. Table Body
+            tableHtml += '<tbody>';
+            sortedDateKeys.forEach((dateKey) => {
+                const dateData = sortedData[dateKey];
+                
+                // UPDATED: Create date label with weekday
+                const dateObj = new Date(dateData._dateObj);
+                const shortDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const weekDay = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+                const dateLabel = `${shortDate}<br>(${weekDay})`; // e.g., "Nov 9<br>(Sunday)"
+
+                // UPDATED: Loop over filtered bins
+                binsToRender.forEach((timeBin, timeIndex) => {
+                    const timeData = dateData[timeBin];
+                    const isFirstRowForDate = timeIndex === 0;
+
+                    // Add thick border class for the first row of a new date
+                    tableHtml += `<tr class="${isFirstRowForDate ? 'date-row-start' : ''}">`;
+
+                    // Rowspan for Date Cell (only on the first time bin)
+                    if (isFirstRowForDate) {
+                        tableHtml += `<td class="sticky-col date-cell" rowspan="${rowSpan}">${dateLabel}</td>`;
+                    }
+                    
+                    // Time Bin Cell
+                    tableHtml += `<td class="sticky-col time-cell">${timeBin.split(' ')[0]}</td>`; // Just "Morning", "Afternoon" etc.
+
+                    // Hotel Data Cells
+                    MATRIX_HOTELS.forEach(hotel => {
+                        const count = timeData ? (timeData[hotel] || 0) : 0;
+                        tableHtml += `<td class="data-cell">${count === 0 ? 0 : count}</td>`;
+                    });
+
+                    // Row Total Cell
+                    const rowTotal = timeData ? (timeData._rowTotal || 0) : 0;
+                    tableHtml += `<td class="total-col data-cell">${rowTotal === 0 ? 0 : rowTotal}</td>`;
+
+                    tableHtml += '</tr>';
+                });
+
+                // Add Day Total Row
+                const dayTotals = dateData._dayTotals;
+                tableHtml += '<tr class="day-total-row">';
+                tableHtml += '<td class="sticky-col total-cell" colspan="2">Day Total</td>'; // Colspan 2 (Date + Time)
+                
+                // Day Totals
+                MATRIX_HOTELS.forEach(hotel => {
+                    const count = dayTotals.byHotel[hotel] || 0;
+                    tableHtml += `<td class="total-cell data-cell">${count === 0 ? 0 : count}</td>`;
+                });
+                
+                tableHtml += `<td class="total-col total-cell data-cell">${dayTotals.total === 0 ? 0 : dayTotals.total}</td>`;
+                tableHtml += '</tr>';
+            });
+
+            // 3. Table Footer (Grand Totals)
+            tableHtml += '<tfoot class="grand-total-row">';
+            tableHtml += '<tr>';
+            tableHtml += '<td class="sticky-col total-cell" colspan="2">GRAND TOTAL</td>';
+            
+            // Grand Totals
+            MATRIX_HOTELS.forEach(hotel => {
+                const count = grandTotals.byHotel[hotel] || 0;
+                tableHtml += `<td class="total-cell data-cell">${count === 0 ? 0 : count}</td>`;
+            });
+
+            tableHtml += `<td class="total-col total-cell data-cell">${grandTotals.total === 0 ? 0 : grandTotals.total}</td>`;
+            tableHtml += '</tr>';
+            tableHtml += '</tfoot>';
+
+            tableHtml += '</tbody></table>';
+            container.innerHTML = tableHtml;
+        }
+
+        // ... existing countBy helper utility ...
+        function countBy(arr, key) {
+            return arr.reduce((acc, item) => {
+                const val = item[key];
+                acc[val] = (acc[val] || 0) + 1;
+                return acc;
+            }, {});
+        }
+
+        // --- NEW: Animate static content and load data on page load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. Animate static header
+            const staticItems = [document.querySelector('header')]; // Removed file-upload-section
+            staticItems.forEach((item, index) => {
+                if (item) {
+                    item.classList.add('animated-item');
+                    item.style.animationDelay = `${index * 100}ms`;
+                }
+            });
+
+            // 2. Start loading the dashboard data
+            loadDashboardData();
+        });
+
+        // --- NEW: Function to load and process data from Google Sheets ---
+        async function loadDashboardData() {
+            // Get elements
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const errorEl = document.getElementById('error-message');
+            const loadingState = document.getElementById('loading-state');
+
+            // Check if the user has updated the URL
+            if (GOOGLE_SHEET_CSV_URL === 'PASTE_YOUR_GOOGLE_SHEET_CSV_URL_HERE' || GOOGLE_SHEET_CSV_URL.trim() === '') {
+                errorEl.textContent = 'Configuration Error: Please update the GOOGLE_SHEET_CSV_URL variable in the HTML script.';
+                loadingSpinner.classList.add('hidden');
+                return;
+            }
+
+            try {
+                // 1. Fetch data from the live URL
+                // Note: Added a cache-busting parameter to help bypass Google's 5-min cache.
+                const response = await fetch(GOOGLE_SHEET_CSV_URL.replace('/pub?', '/pub?output=csv&') + '&t=' + new Date().getTime());
+
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch data. Status: ${response.status}. Check the URL, network, or sheet permissions.`);
+                }
+
+                const csvText = await response.text();
+                
+                if (csvText.trim() === "") {
+                    throw new Error("The fetched CSV data is empty. Check the Google Sheet.");
+                }
+
+                // 2. Process the data (using the existing function)
+                processData(csvText);
+
+                // 3. Show the dashboard
+                dashboard.classList.remove('hidden');
+
+                // 4. Animate the new content
+                const newItems = document.querySelectorAll('#dashboard-container h2, #dashboard-container .bg-white.rounded-lg.shadow');
+                newItems.forEach((item, index) => {
+                    item.classList.add('animated-item');
+                    item.style.animationDelay = `${index * 75}ms`;
+                });
+                
+                // 5. Hide the loading state
+                loadingState.classList.add('hidden');
+
+            } catch (err) {
+                // Handle errors
+                console.error('Error loading dashboard data:', err);
+                errorEl.textContent = `Error: ${err.message}. Could not load live data.`;
+                if (loadingSpinner) loadingSpinner.classList.add('hidden');
+            }
+        }
+
+    </script>
+</body>
+</html>
